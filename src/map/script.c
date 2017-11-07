@@ -6523,6 +6523,7 @@ BUILDIN(warp) {
   int x, y;
   int warp_clean = 1;
   int gid;
+  int16 map_id = -1;  
   char type;
   const char * str;
   struct map_session_data * sd = script - > rid2sd(st);
