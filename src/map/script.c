@@ -6516,40 +6516,84 @@ BUILDIN(rand)
 }
 
 /*==========================================
- * Warp sd to str,x,y or Random or SavePoint/Save
+ * Warp sd to str,x,y or Random or SavePoint/Save, new num for gid and mapid
  *------------------------------------------*/
-BUILDIN(warp)
-{
-	int ret;
-	int x,y;
-	int warp_clean = 1;
-	const char* str;
-	struct map_session_data *sd = script->rid2sd(st);
-	if (sd == NULL)
-		return true;
+BUILDIN(warp) {
+  int ret;
+  int x, y;
+  int warp_clean = 1;
+  int gid;
+  char type;
+  const char * str;
+  struct map_session_data * sd = script - > rid2sd(st);
+  if (sd == NULL)
+    return true;
 
-	str = script_getstr(st,2);
-	x = script_getnum(st,3);
-	y = script_getnum(st,4);
+  str = script_getstr(st, 2);
+  x = script_getnum(st, 3);
+  y = script_getnum(st, 4);
 
-	if (script_hasdata(st, 5)) {
-		warp_clean = script_getnum(st, 5);
-	}
+  if (script_hasdata(st, 5)) {
+    warp_clean = script_getnum(st, 5);
+  } else if (script_hasdata(st, 6)) {
+    gid = script_getnum(st, 6);
+    type = 'guildwarp';
+  }
 
-	sd->state.warp_clean = warp_clean;
-	if(strcmp(str,"Random")==0)
-		ret = pc->randomwarp(sd,CLR_TELEPORT);
-	else if(strcmp(str,"SavePoint")==0 || strcmp(str,"Save")==0)
-		ret = pc->setpos(sd,sd->status.save_point.map,sd->status.save_point.x,sd->status.save_point.y,CLR_TELEPORT);
-	else
-		ret = pc->setpos(sd,script->mapindexname2id(st,str),x,y,CLR_OUTSIGHT);
+  switch (grade) {
+  case 'guildwarp':
+    if (script_hasdata(st, 7)) {
+      map_id = map - > mapname2mapid(script_getstr(st, 7));
+    }
 
-	if( ret ) {
-		ShowError("buildin_warp: moving player '%s' to \"%s\",%d,%d failed.\n", sd->status.name, str, x, y);
-		script->reportsrc(st);
-	}
+    g = guild - > search(gid);
+    if (g == NULL)
+      return true;
 
-	return true;
+    type = (strcmp(str, "Random") == 0) ? 0 : (strcmp(str, "SavePointAll") == 0) ? 1 : (strcmp(str, "SavePoint") == 0) ? 2 : 3;
+
+    if (type == 2 && (sd = script - > rid2sd(st)) == NULL) { // "SavePoint" uses save point of the currently attached player
+      return true;
+    }
+
+    for (i = 0; i < MAX_GUILD; i++) {
+      if (g - > member[i].online && g - > member[i].sd != NULL) {
+        struct map_session_data * pl_sd = g - > member[i].sd;
+
+        if (map_id >= 0 && map_id != pl_sd - > bl.m)
+          continue;
+        switch (type) {
+        case 0: // Random
+          pc - > randomwarp(pl_sd, CLR_TELEPORT);
+          break;
+        case 1: // SavePointAll
+          pc - > setpos(pl_sd, pl_sd - > status.save_point.map, pl_sd - > status.save_point.x, pl_sd - > status.save_point.y, CLR_TELEPORT);
+          break;
+        case 2: // SavePoint
+          pc - > setpos(pl_sd, sd - > status.save_point.map, sd - > status.save_point.x, sd - > status.save_point.y, CLR_TELEPORT);
+          break;
+        case 3: // m,x,y
+          pc - > setpos(pl_sd, script - > mapindexname2id(st, str), x, y, CLR_TELEPORT);
+          break;
+        }
+      }
+    }
+    break;
+  default:
+    sd - > state.warp_clean = warp_clean;
+    if (strcmp(str, "Random") == 0)
+      ret = pc - > randomwarp(sd, CLR_TELEPORT);
+    else if (strcmp(str, "SavePoint") == 0 || strcmp(str, "Save") == 0)
+      ret = pc - > setpos(sd, sd - > status.save_point.map, sd - > status.save_point.x, sd - > status.save_point.y, CLR_TELEPORT);
+    else
+      ret = pc - > setpos(sd, script - > mapindexname2id(st, str), x, y, CLR_OUTSIGHT);
+    if (ret) {
+      ShowError("buildin_warp: moving player '%s' to \"%s\",%d,%d failed.\n", sd - > status.name, str, x, y);
+      script - > reportsrc(st);
+    }
+  }
+
+  return true;
 }
 /*==========================================
  * Warp a specified area
@@ -6796,6 +6840,7 @@ BUILDIN(warpparty)
 		}
 	}
 
+    ShowWarning("buildin_warpparty: warpparty is deprecated.");
 	return true;
 }
 /*==========================================
@@ -6861,7 +6906,7 @@ BUILDIN(warpguild)
 			}
 		}
 	}
-
+    ShowWarning("buildin_warpguild: warpguild is deprecated, use buildin_warp with gid.");
 	return true;
 }
 /*==========================================
